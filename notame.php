@@ -7,18 +7,17 @@ class Notame
     protected $_lastNote = 0;
     protected $_ch;
     protected $_loginUrl = 'https://www.meneame.net/login.php';
-    protected $_logoutUrl = 'http://www.meneame.net/login.php?op=logout';
-    protected $_notameUrl = 'http://www.meneame.net/notame/';
-    protected $_postUrl = 'http://www.meneame.net/backend/post_edit.php';
-    protected $_noteVote = 'http://www.meneame.net/backend/menealo_post.php';
-    protected $_userIp;
-    protected $_userIpControl;
+    protected $_logoutUrl = 'https://www.meneame.net/login.php?op=logout';
+    protected $_notameUrl = 'https://www.meneame.net/notame/';
+    protected $_postUrl = 'https://www.meneame.net/backend/post_edit.php';
+    protected $_noteVote = 'https://www.meneame.net/backend/menealo_post';
 
     /**
      * Configuraciones iniciales de curl
      */
     public function __construct()
     {
+        date_default_timezone_set("Europe/Madrid");
         $this->_ch = curl_init();
         curl_setopt($this->_ch, CURLOPT_USERAGENT, 'Gandalf el Blanco php script');
         curl_setopt($this->_ch, CURLOPT_COOKIEJAR, 'cookie-notame.txt');
@@ -30,7 +29,6 @@ class Notame
         $result = $this->_exec();
 
         if (preg_match('/<a href=\"\/user\/(.*)\" class=\"tooltip u:(.*)\">/iU', $result, $matchLogin) === 0) {
-
             return "El usuario o password no son correctos";
         }
 
@@ -51,8 +49,7 @@ class Notame
         $result = curl_exec($this->_ch);
         $result = trim(str_replace(array("\n", "\r"), "", $result));
 
-        if ($basekey === true && preg_match('/base_key=\"(.*)\";/iU', $result, $matchKey)) {
-
+        if ($basekey === true && preg_match('/base_key=\"(.*)\"/iU', $result, $matchKey)) {
             $this->_basekey = $matchKey[1];
         }
 
@@ -64,19 +61,10 @@ class Notame
         curl_setopt($this->_ch, CURLOPT_URL, $this->_loginUrl);
         $result = $this->_exec();
 
-        if (preg_match('/name=\"userip\" value=\"(.*)\"/iU', $result, $matchUserIp) === 0
-            || preg_match('/name=\"useripcontrol\" value=\"(.*)\"/iU', $result, $matchUserIpControl) === 0) {
-
-            return "Error al recuperar los datos necesarios para el login";
-        }
-
         if (preg_match('/name=\"recaptcha_challenge_field\"/', $result, $captcha)) {
-
             return "Necesario captcha para loguearse";
         }
 
-        $this->_userIp = $matchUserIp[1];
-        $this->_userIpControl = $matchUserIpControl[1];
         return true;
     }
 
@@ -88,14 +76,12 @@ class Notame
     public function login($user, $password)
     {
         $postData = 'processlogin=1&username=' . $user . '&password=' . $password;
-        $postData .= '&userip=' . $this->_userIp . '&useripcontrol=' . $this->_userIpControl;
         curl_setopt($this->_ch, CURLOPT_URL, $this->_loginUrl);
         curl_setopt($this->_ch, CURLOPT_POST, true);
         curl_setopt($this->_ch, CURLOPT_POSTFIELDS, $postData);
         $result = $this->_exec();
 
         if (preg_match('/<a href=\"\/user\/(.*)\" class=\"tooltip u:(.*)\">/iU', $result, $matchLogin) === 0) {
-
             return "El usuario o password no son correctos";
         }
 
@@ -112,7 +98,6 @@ class Notame
         $result = $this->_exec();
 
         if (preg_match('/<a href=\"\/user\/(.*)\" class=\"tooltip u:(.*)\">/iU', $result, $matchLogin) === 0) {
-
             $this->_user = null;
             $this->_userid = null;
             return "Deslogueado correctamente";
@@ -128,7 +113,6 @@ class Notame
     public function loadNotame($page = 1)
     {
         if (intval($page) < 1) {
-
             $page = 1;
         }
 
@@ -141,7 +125,6 @@ class Notame
         $matchNotes[2] = array_reverse($matchNotes[2], true);
 
         foreach ($matchNotes[2] as $key => $note) {
-
             $info = $this->_getNoteInfo($note, $matchNotes[1][$key]);
             $this->showNote($info);
         }
@@ -163,11 +146,8 @@ class Notame
         $result = json_decode($this->_exec());
 
         if (isset($result->error)) {
-
             echo "Error al votar: " . $result->error . "\n";
-
         } else {
-
             echo "Nuevo karma de la nota: " . $result->karma . "\n";
         }
     }
@@ -183,7 +163,6 @@ class Notame
         $result = $this->_exec();
 
         if (!preg_match('/name=\"key\" value=\"(.*)\"/iU', $result, $matchKey)) {
-
             return false;
         }
 
@@ -200,21 +179,16 @@ class Notame
     public function reloadNotame()
     {
         if ($this->_lastNote == 0) {
-
             return false;
         }
 
         $reload = false;
 
         do {
-
             if ($this->loadNote($this->_lastNote + 1) === false) {
-
                 break;
             }
-
             $reload = true;
-
         } while (true);
 
         return $reload;
@@ -233,7 +207,6 @@ class Notame
         preg_match('/<div id=\"pcontainer-' . intval($id) . '\">(.*)<\/div> <\/li>/iU', $result, $matchNote);
 
         if (!isset($matchNote[1])) {
-
             return false;
         }
 
@@ -265,11 +238,11 @@ class Notame
         $html = trim($html);
 
         preg_match('/<span class=\"votes-counter\" id=\"vk-' . $id . '\" title=\"karma\">(.*)<\/span>/U', $html, $noteKarma);
-        preg_match('/<span id=\"vc-' . $id . '\">(.*)<\/span>/U', $html, $noteVotes);
-        preg_match('/<div class=\"comment-info\">(.*)<a/U', $html, $noteDate);
+        preg_match('/<span id=\"vc-' . $id . '\" class=\"votes-counter\">(.*)<\/span>/U', $html, $noteVotes);
+        preg_match('/data-ts=\"(.*)\"/U', $html, $noteDate);
         $note['karma'] = intval($noteKarma[1]);
         $note['votes'] = intval($noteVotes[1]);
-        $note['date'] = trim(str_replace('  ', ' ', $noteDate[1]));
+        $note['date'] = date('d-m-Y H:i:s', $noteDate[1]);
 
         preg_match('/<div class=\"comment-body(.*)\" id=\"pid-' . $id . '\">(.*)<\/div>/iU', $html, $noteInfo);
         $html = $noteInfo[2];
@@ -279,14 +252,15 @@ class Notame
         $note['userId'] = $noteUser[2];
 
         $html = preg_replace('/<a href=\"javascript:post_edit(.*)\" title=\"editar\"><img class=\"mini-icon-text\" src=\"(.*)\" alt=\"edit\" width=\"18\" height=\"12\"\/><\/a>/', '', $html);
-        $html = preg_replace('/<a href=\"\/user\/(.*)" class=\"tooltip u:(.*)\"><img class=\"avatar\" src=\"(.*)\" width=\"40\" height=\"40\" alt=\"(.*)\"\/><\/a>/U', '', $html);
+        $html = preg_replace('/<a href=\"\/user\/(.*)" class=\"tooltip u:(.*)\">(.*)<\/a>/U', '', $html);
         $html = str_replace(array('<sub>', '</sub>', '<sup>', '</sup>'), '', $html);
-        $html = str_replace(array('<i>', '</i>', '<b>', '</b>', '<strong>', '</strong>', '<del>', '</del>'), array("\033[0;35m", "\033[0m", "\033[1;30m", "\033[0m", "\033[1;30m", "\033[0m", "\033[40m", "\033[0m"), $html);
+        $html = str_replace(array('<em>', '</em>', '<b>', '</b>', '<strong>', '</strong>', '<del>', '</del>'), array("\033[0;35m", "\033[0m", "\033[1;30m", "\033[0m", "\033[1;30m", "\033[0m", "\033[40m", "\033[0m"), $html);
         $html = str_replace('&nbsp;', ' ', $html);
         $html = str_replace('<br />', "\n", $html);
-        $html = preg_replace('/ <img src=\"http:\/\/mnmstatic.net\/img\/smileys\/(.*)\" alt=\"(.*)\"(.*)>/U', "\033[1;33m$2\033[0m", $html);
-        $html = preg_replace('/<a class=\'tooltip p:(.*),(.*[0-9])-(.*[0-9])\' href=\'\/backend\/get_post_url.php\?id=(.*),(.*[0-9]);(.*[0-9])\'>(.*)<\/a>/U', "\033[0;33m$7:$5\033[0m", $html);
-        $html = preg_replace('/<a class=\'tooltip p:(.*)-(.*[0-9])\' href=\'\/backend\/get_post_url.php\?id=(.*);(.*[0-9])\'>(.*)<\/a>/U', "\033[0;33m$5\033[0m", $html);
+        $html = preg_replace('/ <img src=\"https:\/\/mnmstatic.net\/v_(.*[0-9])\/img\/smileys\/(.*)\" alt=\"(.*)\"(.*)>/U', "\033[1;33m$3\033[0m", $html);
+        $html = preg_replace('/<a class=\'tooltip p:(.*),(.*[0-9])-(.*[0-9])\' href=\'\/backend\/get_post_url\?id=(.*),(.*[0-9]);(.*[0-9])\'>(.*)<\/a>/U', "\033[0;33m$7:$5\033[0m", $html);
+        $html = preg_replace('/<a class=\'tooltip p:(.*)-(.*[0-9])\' href=\'\/backend\/get_post_url\?id=(.*);(.*[0-9])\'>(.*)<\/a>/U', "\033[0;33m$5\033[0m", $html);
+
         $html = preg_replace('/<a class=\"fancybox\" title=\"subida por (.*)\" href=\"(.*)\">(.*)<\/a>/U', "\033[0;32mhttp://www.meneame.net$2\033[0m", $html);
         $html = preg_replace('/<a href=\"\/search.php(.*)>(.*)<\/a>/U', "\033[1;36m$2\033[0m", $html);
         $html = preg_replace('/<a(.*)href=\"(.*)\"(.*)>(.*)<\/a>/U', "\033[0;32m$2\033[0m", $html);
@@ -296,7 +270,6 @@ class Notame
         $note['text'] = trim($html);
 
         if ($id > $this->_lastNote) {
-
             $this->_lastNote = $id;
         }
 
@@ -309,7 +282,7 @@ class Notame
      */
     public function showNote($note)
     {
-        $title = "\033[0;36m[" . $note['id'] . " :: " .$note['date'] . " " . $note['user'] . "]\033[0m";
+        $title = "\033[0;36m" . $note['id'] . " [" .$note['date'] . "]\033[0m \033[0;34m" . $note['user'] . "\033[0m";
         echo "\n\n" . $title . " ";
         echo "\033[0;32m⇑\033[0m  \033[1;30mkarma:\033[0m " . $note['karma'] . " \033[0;31m⇓\033[0m  \033[1;30mvotos:\033[0m " . $note['votes'];
         echo "\n" . $note['text'];
